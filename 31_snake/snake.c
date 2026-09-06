@@ -62,10 +62,10 @@
 #define BLINK_MS            500
 #define WELCOME_SHOW_MS     2000
 
-/* snake speed: start 300ms/move, -8ms per food, min 80ms */
-#define MOVE_MS_INIT        300
-#define MOVE_MS_DECREASE    8
-#define MOVE_MS_MIN         80
+/* snake speed: start 420ms/move, -5ms per food, min 140ms (gentler ramp) */
+#define MOVE_MS_INIT        420
+#define MOVE_MS_DECREASE    5
+#define MOVE_MS_MIN         140
 
 /* directions: 0=RIGHT, 1=DOWN, 2=LEFT, 3=UP (clockwise) */
 enum {
@@ -116,8 +116,9 @@ static uint8_t  g_snakeY[MAX_SNAKE];
 static uint16_t g_head = 0;       /* index of head in ring buffer       */
 static uint16_t g_len  = 0;       /* current snake length              */
 static uint8_t  g_dir  = DIR_RIGHT;
-static uint8_t  g_nextDir = DIR_RIGHT;
-static uint8_t  g_turnPending = 0; /* one turn per move interval        */
+#define TURN_QUEUE_LEN  3
+static uint8_t  g_turnQueue[TURN_QUEUE_LEN];
+static uint8_t  g_turnCount = 0;   /* pending turns in the queue          */
 static uint8_t  g_foodX = 0;
 static uint8_t  g_foodY = 0;
 static uint16_t g_score = 0;
@@ -201,8 +202,7 @@ static void NewGame(void)
         g_snakeY[idx] = sy;
     }
     g_dir = DIR_RIGHT;
-    g_nextDir = DIR_RIGHT;
-    g_turnPending = 0;
+    g_turnCount = 0;
     g_score = 0;
     g_moveInterval = MOVE_MS_INIT;
     g_over = 0;
@@ -394,14 +394,24 @@ static void HandleKeys(uint32_t now)
         return;   /* ignore turn keys while paused */
     }
 
-    /* R1 short = turn left (CCW), R2 short = turn right (CW) */
-    if (!g_turnPending) {
+    /* R1 = turn left (CCW), R2 = turn right (CW).
+     * Queue up to TURN_QUEUE_LEN turns so rapid taps between move steps
+     * are not lost. Each new turn is validated against the last queued
+     * direction (or current g_dir) to forbid 180 degree reversal. */
+    if (g_turnCount < TURN_QUEUE_LEN) {
+        uint8_t base = (g_turnCount > 0)
+                       ? g_turnQueue[g_turnCount - 1]
+                       : g_dir;
         if (evL & EV_PRESS) {
-            g_nextDir = (uint8_t)((g_dir + 3) % 4);
-            g_turnPending = 1;
+            uint8_t nd = (uint8_t)((base + 3) % 4);
+            if (nd != (uint8_t)((base + 2) % 4)) {
+                g_turnQueue[g_turnCount++] = nd;
+            }
         } else if (evR & EV_PRESS) {
-            g_nextDir = (uint8_t)((g_dir + 1) % 4);
-            g_turnPending = 1;
+            uint8_t nd = (uint8_t)((base + 1) % 4);
+            if (nd != (uint8_t)((base + 2) % 4)) {
+                g_turnQueue[g_turnCount++] = nd;
+            }
         }
     }
 }
@@ -549,11 +559,14 @@ static void SnakeTask(void)
         if (!g_over && !g_paused) {
             if ((now - g_lastMoveMs) >= g_moveInterval) {
                 g_lastMoveMs = now;
-                /* apply buffered direction (can't reverse 180°) */
-                if (g_nextDir != (uint8_t)((g_dir + 2) % 4)) {
-                    g_dir = g_nextDir;
+                /* pop one pending turn (already validated against 180°) */
+                if (g_turnCount > 0) {
+                    g_dir = g_turnQueue[0];
+                    for (uint8_t i = 1; i < g_turnCount; i++) {
+                        g_turnQueue[i - 1] = g_turnQueue[i];
+                    }
+                    g_turnCount--;
                 }
-                g_turnPending = 0;
                 if (MoveSnake()) {
                     g_over = 1;
                     SoundPlay(g_sndCrash,
