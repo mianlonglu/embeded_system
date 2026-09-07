@@ -27,6 +27,7 @@
 #include "iot_gpio.h"
 #include "iot_i2c.h"
 #include "iot_pwm.h"
+#include "hi_pwm.h"
 #include "hi_io.h"
 #include "hi_adc.h"
 #include "hi_errno.h"
@@ -49,6 +50,10 @@
 #define BUZZER_GPIO         9
 #define BUZZER_PWM_PORT     0
 #define BUZZER_DUTY         50
+/* Hi3861 XTAL clock used as PWM source after hi_pwm_set_clock(PWM_CLK_XTAL).
+ * With 40 MHz the 16-bit divider can reach down to ~610 Hz directly.
+ * Lower notes are shifted up octaves so they still play audibly. */
+#define PWM_XTAL_CLK        40000000U
 
 #define LONG_PRESS_MS       500
 #define REPEAT_MS           200
@@ -102,13 +107,30 @@ static void SoundUpdate(uint32_t now)
 {
     if (g_sndBusy) {
         if ((int32_t)(now - g_sndEndMs) < 0) return;
-        IoTPwmStop(BUZZER_PWM_PORT);
+        hi_pwm_stop(BUZZER_PWM_PORT);
         g_sndBusy = 0;
     }
     if (g_sndHead == g_sndTail) return;
     Beep *b = &g_sndQueue[g_sndHead];
     g_sndHead = (uint8_t)((g_sndHead + 1) % SOUND_QUEUE_LEN);
-    if (b->freq > 0) IoTPwmStart(BUZZER_PWM_PORT, BUZZER_DUTY, b->freq);
+    if (b->freq > 0) {
+        /* IoTPwmStart internally divides 160 MHz by freq; for notes
+         * below ~2441 Hz the 16-bit divider overflows and it silently
+         * returns IOT_FAILURE.  Use the low-level hi_pwm_start with
+         * the 40 MHz XTAL clock so notes down to ~610 Hz work, and
+         * shift anything lower up an octave.  Same approach as the
+         * 15_pwmbeermusic reference demo. */
+        uint32_t freq = b->freq;
+        uint32_t div  = PWM_XTAL_CLK / freq;
+        while (div > 0xFFFF && freq < PWM_XTAL_CLK) {
+            freq *= 2;
+            div   = PWM_XTAL_CLK / freq;
+        }
+        if (div != 0 && div <= 0xFFFF) {
+            uint16_t dutyCount = (uint16_t)((BUZZER_DUTY * div) / 100);
+            hi_pwm_start(BUZZER_PWM_PORT, dutyCount, (uint16_t)div);
+        }
+    }
     g_sndEndMs = now + b->durMs;
     g_sndBusy = 1;
 }
@@ -282,6 +304,12 @@ static void InitBuzzer(void)
     hi_io_set_func(BUZZER_GPIO, HI_IO_FUNC_GPIO_9_PWM0_OUT);
     IoTGpioSetDir(BUZZER_GPIO, IOT_GPIO_DIR_OUT);
     IoTPwmInit(BUZZER_PWM_PORT);
+    /* IoTPwmInit sets the clock to 160 MHz, which makes IoTPwmStart
+     * reject any note below ~2441 Hz.  Switch to the 40 MHz crystal
+     * so the low-level hi_pwm_start in SoundUpdate can drive the
+     * buzzer at the audio frequencies we need.  Same as the
+     * 15_pwmbeermusic reference demo. */
+    hi_pwm_set_clock(PWM_CLK_XTAL);
 }
 static void InitLeds(void)
 {
