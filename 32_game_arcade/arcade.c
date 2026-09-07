@@ -195,6 +195,12 @@ void KeysScan(uint8_t *evR1, uint8_t *evR2, uint8_t *evUser, uint32_t now)
     if (evR2)   *evR2   = KeyUpdate(&g_keyR2,   raw == KEY_R2,   now);
     if (evUser) *evUser = KeyUpdate(&g_keyUser, raw == KEY_USER, now);
 }
+void KeysHeld(uint8_t *r1, uint8_t *r2, uint8_t *user)
+{
+    if (r1)   *r1   = g_keyR1.held;
+    if (r2)   *r2   = g_keyR2.held;
+    if (user) *user = g_keyUser.held;
+}
 void KeysReset(void)
 {
     Key *keys[] = { &g_keyR1, &g_keyR2, &g_keyUser };
@@ -215,7 +221,7 @@ void FillRect(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2,
 /* ===================== MENU ===================== */
 static uint8_t g_menuSel = 0;
 static const char *g_gameNames[GAME_COUNT] = {
-    "MINESWEEPER", "SNAKE", "BREAKOUT", "MOVIE"
+    "MINESWEEPER", "SNAKE", "BREAKOUT", "Genshin Impact"
 };
 
 static void MenuRender(void)

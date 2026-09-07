@@ -32,6 +32,10 @@
 #define PADDLE_Y        58
 #define BALL_SIZE       3
 #define BALL_STEP_MS    45
+/* paddle moves PADDLE_SPEED pixels per main-loop tick (20 ms) while
+ * the key is held. 2 px/tick = 100 px/s, crossing the 104 px travel
+ * in about one second. */
+#define PADDLE_SPEED    2
 
 static uint8_t  b_bricks[BRICK_ROWS][BRICK_COLS];
 static uint16_t b_brickCnt;
@@ -87,13 +91,20 @@ void BrkUpdate(uint32_t now, uint8_t *toMenu)
         return;
     }
 
-    if ((evL & EV_PRESS) || (evL & (EV_LONG | EV_REPEAT))) {
-        if (b_paddleX > 0) b_paddleX--;
+    /* continuous paddle movement while a key is held (not event-based),
+     * so the paddle glides instead of inching one pixel every 200 ms. */
+    uint8_t hL, hR, hU;
+    KeysHeld(&hL, &hR, &hU);
+    if (hL) {
+        uint8_t step = (b_paddleX > PADDLE_SPEED) ? PADDLE_SPEED : b_paddleX;
+        b_paddleX -= step;
         if (!b_launched) b_ballX = b_paddleX + (PADDLE_W - BALL_SIZE) / 2;
         b_dirty = 1;
     }
-    if ((evR & EV_PRESS) || (evR & (EV_LONG | EV_REPEAT))) {
-        if (b_paddleX < SSD1306_WIDTH - PADDLE_W) b_paddleX++;
+    if (hR) {
+        uint8_t room = SSD1306_WIDTH - PADDLE_W - b_paddleX;
+        uint8_t step = (room > PADDLE_SPEED) ? PADDLE_SPEED : room;
+        b_paddleX += step;
         if (!b_launched) b_ballX = b_paddleX + (PADDLE_W - BALL_SIZE) / 2;
         b_dirty = 1;
     }

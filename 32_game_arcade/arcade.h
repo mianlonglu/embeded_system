@@ -60,6 +60,10 @@ enum {
  * bit-masks for R1, R2 and USER. Must be called once per tick. */
 void KeysScan(uint8_t *evR1, uint8_t *evR2, uint8_t *evUser, uint32_t now);
 
+/* Return the current held (pressed) state of each key as 0/1.
+ * Useful for continuous-movement controls (e.g. paddle). */
+void KeysHeld(uint8_t *r1, uint8_t *r2, uint8_t *user);
+
 /* Reset internal key state (call when switching between screens). */
 void KeysReset(void);
 

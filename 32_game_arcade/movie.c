@@ -17,9 +17,12 @@
  * frame_data.c into the SSD1306 buffer and streams the matching
  * single-tone melody from sfx_data.c through the buzzer queue.
  *
- * Frame rate   : 12 fps  -> 83 ms/frame
- * Video length : 280 frames (~23.3 s)
- * Audio        : 170 Beep notes, fed into the 16-slot buzzer queue
+ * Frame layout : horizontal-scan bitmap (same as 13_oledplayer),
+ *                played back via ssd1306_DrawBitmap -- this is the
+ *                rendering path proven to work on the Hi3861 board.
+ * Frame rate   : 10 fps  -> 100 ms/frame
+ * Video length : 234 frames (~23.4 s)
+ * Audio        : 132 Beep notes, fed into the 16-slot buzzer queue
  *                a few notes at a time so the whole melody plays
  *                without overflowing the queue.
  */
@@ -41,8 +44,8 @@ extern const uint8_t  MOVIE_DATA[];     /* size = MOVIE_DATA_LEN        */
 extern const uint16_t MOVIE_SFX_COUNT;
 extern const Beep     MOVIE_SFX[];      /* size = MOVIE_SFX_COUNT       */
 
-#define MOVIE_FPS         12
-#define MOVIE_FRAME_MS    (1000 / MOVIE_FPS)   /* 83 ms */
+#define MOVIE_FPS         10
+#define MOVIE_FRAME_MS    (1000 / MOVIE_FPS)   /* 100 ms */
 
 /* feed this many notes per tick when the queue has room. Keeps the
  * 16-slot buzzer queue topped up without overflowing it. */
@@ -55,7 +58,8 @@ static uint8_t  m_started = 0;
 static uint8_t  m_finished = 0;    /* 1 once last frame shown     */
 static uint8_t  m_dirty = 1;
 
-/* RLE scratch buffer reused every render (1 KB). */
+/* RLE scratch buffer reused every render (1 KB). Layout matches
+ * ssd1306_DrawBitmap: row-major, 16 bytes/row, MSB = leftmost pixel. */
 static uint8_t m_buf[1024];
 
 /* decode frame f from MOVIE_DATA into m_buf (1024 bytes). */
@@ -87,7 +91,8 @@ void MovieInit(void)
     LedAllOff();
     /* first frame visible immediately */
     MovieDecodeFrame(0);
-    ssd1306_FillBuffer(m_buf, sizeof(m_buf));
+    ssd1306_Fill(Black);
+    ssd1306_DrawBitmap(m_buf, sizeof(m_buf));
     ssd1306_UpdateScreen();
 }
 
@@ -121,7 +126,7 @@ void MovieUpdate(uint32_t now, uint8_t *toMenu)
         m_sfxIdx++;
     }
 
-    /* advance video frame at 12 fps. Uses an absolute deadline so the
+    /* advance video frame at 10 fps. Uses an absolute deadline so the
      * clip length stays correct even if the odd tick slips. */
     if ((int32_t)(now - m_nextFrameMs) >= 0) {
         m_nextFrameMs += MOVIE_FRAME_MS;
@@ -139,6 +144,7 @@ void MovieRender(void)
     if (!m_dirty) return;
     m_dirty = 0;
     MovieDecodeFrame(m_frame);
-    ssd1306_FillBuffer(m_buf, sizeof(m_buf));
+    ssd1306_Fill(Black);
+    ssd1306_DrawBitmap(m_buf, sizeof(m_buf));
     ssd1306_UpdateScreen();
 }

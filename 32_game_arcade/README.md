@@ -115,10 +115,10 @@ sfx_data.c   ──── 仅 const 数据，无逻辑
 ### 步骤
 
 1. 把视频（mp4/avi/mov 等）和音频（mp3/wav/m4a 等）放到任意目录。
-2. 用 ffmpeg 抽帧（128×64 灰度，12 fps）：
+2. 用 ffmpeg 抽帧（128×64 灰度，**10 fps**，与 13_oledplayer 示例一致）：
 
    ```
-   ffmpeg -i input.mp4 -vf "scale=128:64:force_original_aspect_ratio=decrease,pad=128:64:(ow-iw)/2:(oh-ih)/2:black,format=gray" -r 12 f%04d.png
+   ffmpeg -i input.mp4 -vf "scale=128:64:force_original_aspect_ratio=decrease,pad=128:64:(ow-iw)/2:(oh-ih)/2:black,format=gray" -r 10 f%04d.png
    ```
 
 3. 用 ffmpeg 把音频转 8 kHz 单声道 16-bit wav：
@@ -128,16 +128,20 @@ sfx_data.c   ──── 仅 const 数据，无逻辑
    ```
 
 4. 运行转换脚本（仓库未附带，可参照本节说明自行编写）：
-   - 逐帧读取 PNG，二值化（阈值 127）后按 SSD1306 页寻址格式打包成 1024 字节/帧
+   - 逐帧读取 PNG，二值化（阈值 127）后按**水平扫描格式**打包成 1024 字节/帧（每行 16 字节，字节内 bit7=最左像素，与 `13_oledplayer/oled/img2code.py` 的 `convert_frame_to_bytes` 完全一致）
    - 字节级 RLE 压缩每帧，输出 `frame_data.c`（含 `MOVIE_FRAME_COUNT`、`MOVIE_OFFSET[]`、`MOVIE_DATA[]`）
-   - 对 wav 每 80 ms 做一次 FFT，取主频量化到最近的 MIDI 音符（C2–C7 范围，匹配无源蜂鸣器），合并相邻同音，截断到视频时长，输出 `sfx_data.c`（含 `MOVIE_SFX[]`）
+   - 对 wav 每 100 ms 做一次 FFT，取主频量化到最近的 MIDI 音符（C2–C7 范围，匹配无源蜂鸣器），合并相邻同音，截断到视频时长，输出 `sfx_data.c`（含 `MOVIE_SFX[]`）
 5. 把两个生成的 .c 文件覆盖 `32_game_arcade/` 下的同名文件，重新编译烧录。
+
+### 播放说明
+
+播放端（`movie.c`）不使用 `ssd1306_FillBuffer`（其内部 `memmove_s` 在 Hi3861 上兼容性不佳），而是参照 `13_oledplayer` 的做法，用 `ssd1306_Fill(Black)` + `ssd1306_DrawBitmap(buf, 1024)` + `ssd1306_UpdateScreen()` 逐帧绘制。`DrawBitmap` 按水平扫描格式读取 `m_buf`，逐像素写入 OLED 缓冲区，这是在 Hi3861 上验证可用的渲染路径。
 
 ### 数据量参考（当前素材）
 
-- 视频：280 帧 × 1024 B 原始 = 280 KB；RLE 压缩后 `MOVIE_DATA` 仅 **18.4 KB**（原神 PV 转黑白后有大片纯黑/纯白行，RLE 效率很高，最大单帧 262 B）。
-- 音频：170 条 Beep（`freq, durMs`），约占 680 B。
-- Flash 总增量约 **20 KB**，对 Hi3861 余量充裕。
+- 视频：234 帧 × 1024 B 原始 = 234 KB；RLE 压缩后 `MOVIE_DATA` 约 **95.8 KB**（水平扫描格式下 RLE 效率低于页寻址，但仍远小于原始大小）。
+- 音频：132 条 Beep（`freq, durMs`），约占 530 B。
+- Flash 总增量约 **96 KB**，对 Hi3861（2 MB Flash）余量充裕。
 
 ## 六、运行结果
 
