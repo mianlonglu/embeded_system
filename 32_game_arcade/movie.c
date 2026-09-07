@@ -21,10 +21,13 @@
  *                played back via ssd1306_DrawBitmap -- this is the
  *                rendering path proven to work on the Hi3861 board.
  * Frame rate   : 10 fps  -> 100 ms/frame
- * Video length : 234 frames (~23.4 s)
- * Audio        : 132 Beep notes, fed into the 16-slot buzzer queue
- *                a few notes at a time so the whole melody plays
- *                without overflowing the queue.
+ * Video length : 72 frames (~7.2 s)
+ * Audio        : 47 Beep notes extracted from the mp4 audio track,
+ *                fed into the 16-slot buzzer queue a few notes at a
+ *                time so the whole melody plays without overflowing.
+ *                Audio feeding continues even after the last video
+ *                frame is shown, so the soundtrack always plays to
+ *                completion.
  */
 
 #include <stdint.h>
@@ -104,8 +107,19 @@ void MovieUpdate(uint32_t now, uint8_t *toMenu)
     /* USER long-press always returns to the menu. */
     if (evU & EV_LONG) { *toMenu = 1; return; }
 
-    /* once the clip has finished, any short press returns. */
-    if (m_finished) {
+    /* stream audio: keep feeding notes until the soundtrack is done.
+     * This runs BEFORE the finished-check so audio keeps playing even
+     * after the last video frame has been shown. */
+    for (uint8_t k = 0; k < MOVIE_FEED_PER_TICK; k++) {
+        if (m_sfxIdx >= MOVIE_SFX_COUNT) break;
+        if (SoundSlots() == 0) break;
+        SoundPlay(&MOVIE_SFX[m_sfxIdx], 1);
+        m_sfxIdx++;
+    }
+
+    /* clip is fully finished only when the video is done AND the audio
+     * has been fed. Once both are done, any short press returns. */
+    if (m_finished && m_sfxIdx >= MOVIE_SFX_COUNT) {
         if ((evR1 & EV_SHORT) || (evR2 & EV_SHORT) || (evU & EV_SHORT)) {
             *toMenu = 1;
         }
@@ -115,15 +129,6 @@ void MovieUpdate(uint32_t now, uint8_t *toMenu)
     if (!m_started) {
         m_started = 1;
         m_nextFrameMs = now + MOVIE_FRAME_MS;
-    }
-
-    /* stream audio: while the buzzer queue has room, push a few notes
-     * so the long melody plays continuously. */
-    for (uint8_t k = 0; k < MOVIE_FEED_PER_TICK; k++) {
-        if (m_sfxIdx >= MOVIE_SFX_COUNT) break;
-        if (SoundSlots() == 0) break;
-        SoundPlay(&MOVIE_SFX[m_sfxIdx], 1);
-        m_sfxIdx++;
     }
 
     /* advance video frame at 10 fps. Uses an absolute deadline so the

@@ -20,8 +20,8 @@
 ├── snake.c         # 贪吃蛇游戏
 ├── breakout.c      # 弹球消方块游戏
 ├── movie.c         # 视频播放器（解码 RLE 帧到 OLED + 流式喂入蜂鸣器旋律）
-├── frame_data.c    # 自动生成：280 帧 128×64 1bpp 视频，RLE 压缩后约 18.4 KB
-├── sfx_data.c      # 自动生成：170 条 Beep 音符，匹配视频时长（约 23.3 秒）
+├── frame_data.c    # 自动生成：72 帧 128×64 1bpp 视频，RLE 压缩后约 6.9 KB
+├── sfx_data.c      # 自动生成：47 条 Beep 音符，从 mp4 音轨提取（约 7.2 秒）
 ├── BUILD.gn
 └── README.md
 ```
@@ -139,9 +139,9 @@ sfx_data.c   ──── 仅 const 数据，无逻辑
 
 ### 数据量参考（当前素材）
 
-- 视频：234 帧 × 1024 B 原始 = 234 KB；RLE 压缩后 `MOVIE_DATA` 约 **95.8 KB**（水平扫描格式下 RLE 效率低于页寻址，但仍远小于原始大小）。
-- 音频：132 条 Beep（`freq, durMs`），约占 530 B。
-- Flash 总增量约 **96 KB**，对 Hi3861（2 MB Flash）余量充裕。
+- 视频：72 帧 × 1024 B 原始 = 72 KB；RLE 压缩后 `MOVIE_DATA` 约 **6.9 KB**（水平扫描格式下 RLE 效率低于页寻址，但仍远小于原始大小）。
+- 音频：47 条 Beep（`freq, durMs`），约占 190 B。
+- Flash 总增量约 **7 KB**，对 Hi3861（2 MB Flash）余量充裕。
 
 ## 六、运行结果
 
