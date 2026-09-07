@@ -18,6 +18,9 @@ static_library("game_arcade_demo") {
         "minesweeper.c",
         "snake.c",
         "breakout.c",
+        "movie.c",
+        "frame_data.c",
+        "sfx_data.c",
         "../12_ssd1306/ssd1306/ssd1306.c",
         "//third_party/ssd1306/ssd1306_fonts.c",
     ]

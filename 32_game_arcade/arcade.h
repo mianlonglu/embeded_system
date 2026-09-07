@@ -50,6 +50,7 @@ enum {
     GAME_MINESWEEPER = 0,
     GAME_SNAKE,
     GAME_BREAKOUT,
+    GAME_MOVIE,
     GAME_COUNT,
 };
 
@@ -64,6 +65,10 @@ void KeysReset(void);
 
 /* Non-blocking buzzer: enqueue a sequence of notes (freq 0 = silence). */
 void SoundPlay(const Beep *notes, uint8_t count);
+
+/* Number of free slots in the buzzer queue (0..SOUND_QUEUE_LEN-1).
+ * Lets long melodies feed themselves a few notes at a time. */
+uint8_t SoundSlots(void);
 
 /* Indicator LEDs (active high). LedPulse fires a timed pulse; red has
  * priority over green. */
@@ -88,5 +93,9 @@ void SnakeRender(void);
 void BrkInit(void);
 void BrkUpdate(uint32_t now, uint8_t *toMenu);
 void BrkRender(void);
+
+void MovieInit(void);
+void MovieUpdate(uint32_t now, uint8_t *toMenu);
+void MovieRender(void);
 
 #endif /* ARCADE_H */

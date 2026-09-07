@@ -91,6 +91,13 @@ void SoundPlay(const Beep *notes, uint8_t count)
 {
     for (uint8_t i = 0; i < count; i++) SoundQueue(notes[i].freq, notes[i].durMs);
 }
+uint8_t SoundSlots(void)
+{
+    /* one slot must stay empty to distinguish full from empty ring */
+    int queued = (int)(g_sndTail - g_sndHead + SOUND_QUEUE_LEN) % SOUND_QUEUE_LEN;
+    int free   = SOUND_QUEUE_LEN - 1 - queued;
+    return (uint8_t)(free < 0 ? 0 : free);
+}
 static void SoundUpdate(uint32_t now)
 {
     if (g_sndBusy) {
@@ -208,7 +215,7 @@ void FillRect(uint8_t x1, uint8_t y1, uint8_t x2, uint8_t y2,
 /* ===================== MENU ===================== */
 static uint8_t g_menuSel = 0;
 static const char *g_gameNames[GAME_COUNT] = {
-    "MINESWEEPER", "SNAKE", "BREAKOUT"
+    "MINESWEEPER", "SNAKE", "BREAKOUT", "MOVIE"
 };
 
 static void MenuRender(void)
@@ -216,14 +223,16 @@ static void MenuRender(void)
     ssd1306_Fill(Black);
     ssd1306_SetCursor(3, 0);            /* 11 chars * 11px = 121px, +3 = 124 */
     ssd1306_DrawString("GAME ARCADE", Font_11x18, White);
+    /* 4 items: y = 19, 28, 37, 46 (Font_7x10 is 10px tall, so 46+10=56);
+     * bottom hint at y=56 fits the 6x8 font in the last 8 rows.       */
     for (uint8_t i = 0; i < GAME_COUNT; i++) {
-        ssd1306_SetCursor(8, 24 + i * 11);
+        ssd1306_SetCursor(8, 19 + i * 9);
         char buf[22];
         snprintf(buf, sizeof(buf), "%c %s",
                  (i == g_menuSel) ? '>' : ' ', g_gameNames[i]);
         ssd1306_DrawString(buf, Font_7x10, White);
     }
-    ssd1306_SetCursor(2, 64 - 10);
+    ssd1306_SetCursor(2, 64 - 8);
     ssd1306_DrawString("R1:next R2/USER:start", Font_6x8, White);
     ssd1306_UpdateScreen();
 }
@@ -283,6 +292,7 @@ enum {
     STATE_MINESWEEPER,
     STATE_SNAKE,
     STATE_BREAKOUT,
+    STATE_MOVIE,
 };
 
 static void StartGame(uint8_t id)
@@ -291,6 +301,7 @@ static void StartGame(uint8_t id)
     if (id == GAME_MINESWEEPER)      { MineInit(); }
     else if (id == GAME_SNAKE)       { SnakeInit(); }
     else if (id == GAME_BREAKOUT)    { BrkInit(); }
+    else if (id == GAME_MOVIE)       { MovieInit(); }
     printf("[Arcade] starting game: %s\r\n", g_gameNames[id]);
 }
 
@@ -324,6 +335,9 @@ static void ArcadeTask(void)
         } else if (state == STATE_BREAKOUT) {
             BrkUpdate(now, &toMenu);
             BrkRender();
+        } else if (state == STATE_MOVIE) {
+            MovieUpdate(now, &toMenu);
+            MovieRender();
         }
 
         if (toMenu) {
